@@ -11,8 +11,9 @@ import numpy as np
 def download_data():
     gdown.download("https://drive.google.com/uc?export=download&id=1x1CkrJRe6PTOdWouYLhqG3f8MEXP-kbl", "VN2023-data-Ticker.csv", quiet=False)
     gdown.download("https://drive.google.com/uc?export=download&id=1M9GA96Zhoj9HzqMPIlfnMeK7pob1bv2z", "VN2023-data-Info.csv", quiet=False)
-    df_ticker = pd.read_csv("VN2023-data-Ticker.csv")
-    df_info = pd.read_csv("VN2023-data-Info.csv")
+    # Đọc dữ liệu bằng Pandas và thêm `low_memory=False` để giảm cảnh báo
+    df_ticker = pd.read_csv("VN2023-data-Ticker.csv", low_memory=False)
+    df_info = pd.read_csv("VN2023-data-Info.csv", low_memory=False)
     return df_ticker, df_info
 
 # Tải mô hình LSTM từ Google Drive và cache lại để tránh tải lại nhiều lần
