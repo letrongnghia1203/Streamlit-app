@@ -5,39 +5,32 @@ import plotly.graph_objects as go
 from tensorflow.keras.models import load_model
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
-import os
 
 # Tải dữ liệu từ Google Drive
-ticker_data_url = "https://drive.google.com/uc?export=download&id=1x1CkrJRe6PTOdWouYLhqG3f8MEXP-kbl"
-info_data_url = "https://drive.google.com/uc?export=download&id=1M9GA96Zhoj9HzqMPIlfnMeK7pob1bv2z"
-model_id = '1-2diAZCXfnoe38o21Vv5Sx8wmre1IceY'
+@st.cache_data
+def download_data():
+    gdown.download("https://drive.google.com/uc?export=download&id=1x1CkrJRe6PTOdWouYLhqG3f8MEXP-kbl", "VN2023-data-Ticker.csv", quiet=False)
+    gdown.download("https://drive.google.com/uc?export=download&id=1M9GA96Zhoj9HzqMPIlfnMeK7pob1bv2z", "VN2023-data-Info.csv", quiet=False)
+    df_ticker = pd.read_csv("VN2023-data-Ticker.csv")
+    df_info = pd.read_csv("VN2023-data-Info.csv")
+    return df_ticker, df_info
 
-if not os.path.exists("VN2023-data-Ticker.csv"):
-    gdown.download(ticker_data_url, "VN2023-data-Ticker.csv", quiet=False)
-
-if not os.path.exists("VN2023-data-Info.csv"):
-    gdown.download(info_data_url, "VN2023-data-Info.csv", quiet=False)
-
-if not os.path.exists("best_lstm_model.keras"):
-    gdown.download(f'https://drive.google.com/uc?export=download&id={model_id}', 'best_lstm_model.keras', quiet=False)
-
+# Tải mô hình LSTM từ Google Drive và cache lại để tránh tải lại nhiều lần
 @st.cache_resource
 def load_lstm_model():
+    model_id = '1-2diAZCXfnoe38o21Vv5Sx8wmre1IceY'
+    gdown.download(f'https://drive.google.com/uc?export=download&id={model_id}', 'best_lstm_model.keras', quiet=False)
     return load_model('best_lstm_model.keras')
 
-# Load model
 loaded_lstm_model = load_lstm_model()
-
-# Đọc dữ liệu bằng Pandas
-df_ticker = pd.read_csv("VN2023-data-Ticker.csv")
-df_info = pd.read_csv("VN2023-data-Info.csv")
+df_ticker, df_info = download_data()
 
 # Tiền xử lý dữ liệu
 df_info.columns = [col.replace('.', '_') for col in df_info.columns]
 df_joined = pd.merge(df_info, df_ticker, on="Name", how="inner")
-
-# Xử lý cột ngày và giá
 ticker_date_columns = [col for col in df_ticker.columns if '/' in col]
+
+# Chuyển đổi dữ liệu từ dạng rộng sang dạng dài
 df_vietnam = df_joined.melt(id_vars=list(df_info.columns) + ["Code"],
                             value_vars=ticker_date_columns,
                             var_name="Ngày", value_name="Giá đóng cửa")
@@ -58,7 +51,8 @@ symbol = st.text_input("Nhập mã cổ phiếu để xem biểu đồ và dự 
 
 # Hàm tạo chuỗi cho LSTM
 def create_sequences(data, seq_length=5):
-    x, y = [], []
+    x = []
+    y = []
     for i in range(len(data) - seq_length):
         x.append(data[i:i + seq_length])
         y.append(data[i + seq_length])
@@ -71,7 +65,7 @@ if symbol:
     if not df_filtered.empty:
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=df_filtered['Ngày'], y=df_filtered['Giá đóng cửa'], mode='lines+markers', name='Giá Đóng Cửa'))
-
+        
         prices = df_filtered[['Giá đóng cửa']].values
         scaler = MinMaxScaler(feature_range=(0, 1))
         prices_scaled = scaler.fit_transform(prices)
