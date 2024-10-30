@@ -1,35 +1,54 @@
 import streamlit as st
+import gdown
 import pandas as pd
 import plotly.graph_objects as go
-import numpy as np
+from tensorflow.keras.models import load_model
 from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
+import numpy as np
+import psutil  # Library for monitoring system resources
 
-# Hàm khởi tạo mô hình LSTM mới
-def create_lstm_model(input_shape):
-    model = Sequential()
-    model.add(LSTM(units=50, return_sequences=True, input_shape=input_shape))
-    model.add(LSTM(units=50))
-    model.add(Dense(units=1))
-    model.compile(optimizer='adam', loss='mean_squared_error')
-    return model
+# Define memory usage threshold (in MB)
+MEMORY_THRESHOLD_MB = 1000  # Set the limit at which to clear cache and reload data
 
-# Khởi tạo mô hình LSTM mà không cần tải từ tệp
-lstm_model = create_lstm_model((5, 1))  # Thiết lập hình dạng đầu vào của bạn
+def clear_cache_if_memory_high():
+    # Get the current memory usage
+    memory_usage = psutil.virtual_memory().used / (1024 * 1024)  # Convert to MB
+    
+    # Check if memory usage exceeds the threshold
+    if memory_usage > MEMORY_THRESHOLD_MB:
+        st.cache_data.clear()      # Clear cached data
+        st.cache_resource.clear()  # Clear cached resources
+        st.warning("Memory usage is high. Cache has been cleared to free up resources. Reloading data...")
 
-# Tải dữ liệu từ Google Drive
-@st.cache_data
+        # Reload data and model after clearing cache
+        global loaded_lstm_model, df_ticker, df_info
+        loaded_lstm_model = load_lstm_model()
+        df_ticker, df_info = download_data()
+
+# Tải dữ liệu từ Google Drive với cache hạn chế thời gian lưu trữ (TTL)
+@st.cache_data(ttl=600)  # Cache sẽ tự động xóa sau 10 phút
 def download_data():
-    url = "https://drive.google.com/uc?export=download&id=1x1CkrJRe6PTOdWouYLhqG3f8MEXP-kbl"
-    df_ticker = pd.read_csv(url)
-    url_info = "https://drive.google.com/uc?export=download&id=1M9GA96Zhoj9HzqMPIlfnMeK7pob1bv2z"
-    df_info = pd.read_csv(url_info)
+    gdown.download("https://drive.google.com/uc?export=download&id=1x1CkrJRe6PTOdWouYLhqG3f8MEXP-kbl", "VN2023-data-Ticker.csv", quiet=False)
+    gdown.download("https://drive.google.com/uc?export=download&id=1M9GA96Zhoj9HzqMPIlfnMeK7pob1bv2z", "VN2023-data-Info.csv", quiet=False)
+    df_ticker = pd.read_csv("VN2023-data-Ticker.csv", low_memory=False)
+    df_info = pd.read_csv("VN2023-data-Info.csv", low_memory=False)
     return df_ticker, df_info
 
+# Tải mô hình LSTM từ Google Drive và cache lại để tránh tải lại nhiều lần
+@st.cache_resource(ttl=600)  # Cache sẽ tự động xóa sau 10 phút
+def load_lstm_model():
+    model_id = '1-2diAZCXfnoe38o21Vv5Sx8wmre1IceY'
+    gdown.download(f'https://drive.google.com/uc?export=download&id={model_id}', 'best_lstm_model.keras', quiet=False)
+    return load_model('best_lstm_model.keras')
+
+# Run memory check before loading resources
+clear_cache_if_memory_high()
+
+# Load data and model
+loaded_lstm_model = load_lstm_model()
 df_ticker, df_info = download_data()
 
-# Xử lý dữ liệu
+# Tiền xử lý dữ liệu
 df_info.columns = [col.replace('.', '_') for col in df_info.columns]
 df_joined = pd.merge(df_info, df_ticker, on="Name", how="inner")
 ticker_date_columns = [col for col in df_ticker.columns if '/' in col]
@@ -84,13 +103,13 @@ if symbol:
         X, _ = create_sequences(prices_scaled, seq_length)
 
         if len(X) > 0:
-            # Dự đoán bằng mô hình LSTM (chưa được huấn luyện nên kết quả chỉ là ví dụ)
-            predictions = lstm_model.predict(X)
+            # Dự đoán bằng LSTM
+            predictions = loaded_lstm_model.predict(X)
             predictions = scaler.inverse_transform(predictions)
 
             # Thêm dự đoán vào biểu đồ
             prediction_dates = df_filtered['Ngày'].iloc[seq_length:].values
-            fig.add_trace(go.Scatter(x=prediction_dates, y=predictions.flatten(), mode='lines', name='Dự đoán (untrained)'))
+            fig.add_trace(go.Scatter(x=prediction_dates, y=predictions.flatten(), mode='lines', name='Dự đoán'))
 
         fig.update_layout(title=f'Giá Đóng Cửa Cổ Phiếu {symbol.upper()} với Dự Đoán LSTM',
                           xaxis_title='Ngày', yaxis_title='Giá Đóng Cửa (VND)', template='plotly_white')
