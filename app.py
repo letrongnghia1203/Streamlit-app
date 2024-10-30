@@ -5,24 +5,46 @@ import plotly.graph_objects as go
 from tensorflow.keras.models import load_model
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
+import psutil  # Library for monitoring system resources
+
+# Define memory usage threshold (in MB)
+MEMORY_THRESHOLD_MB = 1000  # Set the limit at which to clear cache and reload data
+
+def clear_cache_if_memory_high():
+    # Get the current memory usage
+    memory_usage = psutil.virtual_memory().used / (1024 * 1024)  # Convert to MB
+    
+    # Check if memory usage exceeds the threshold
+    if memory_usage > MEMORY_THRESHOLD_MB:
+        st.cache_data.clear()      # Clear cached data
+        st.cache_resource.clear()  # Clear cached resources
+        st.warning("Memory usage is high. Cache has been cleared to free up resources. Reloading data...")
+
+        # Reload data and model after clearing cache
+        global loaded_lstm_model, df_ticker, df_info
+        loaded_lstm_model = load_lstm_model()
+        df_ticker, df_info = download_data()
 
 # Tải dữ liệu từ Google Drive với cache hạn chế thời gian lưu trữ (TTL)
 @st.cache_data(ttl=600)  # Cache sẽ tự động xóa sau 10 phút
 def download_data():
     gdown.download("https://drive.google.com/uc?export=download&id=1x1CkrJRe6PTOdWouYLhqG3f8MEXP-kbl", "VN2023-data-Ticker.csv", quiet=False)
     gdown.download("https://drive.google.com/uc?export=download&id=1M9GA96Zhoj9HzqMPIlfnMeK7pob1bv2z", "VN2023-data-Info.csv", quiet=False)
-    # Đọc dữ liệu bằng Pandas và thêm `low_memory=False` để giảm cảnh báo
     df_ticker = pd.read_csv("VN2023-data-Ticker.csv", low_memory=False)
     df_info = pd.read_csv("VN2023-data-Info.csv", low_memory=False)
     return df_ticker, df_info
 
 # Tải mô hình LSTM từ Google Drive và cache lại để tránh tải lại nhiều lần
-@st.cache_resource(ttl=600)  # Cache sẽ tự động xóa sau 24 giờ
+@st.cache_resource(ttl=600)  # Cache sẽ tự động xóa sau 10 phút
 def load_lstm_model():
     model_id = '1-2diAZCXfnoe38o21Vv5Sx8wmre1IceY'
     gdown.download(f'https://drive.google.com/uc?export=download&id={model_id}', 'best_lstm_model.keras', quiet=False)
     return load_model('best_lstm_model.keras')
 
+# Run memory check before loading resources
+clear_cache_if_memory_high()
+
+# Load data and model
 loaded_lstm_model = load_lstm_model()
 df_ticker, df_info = download_data()
 
