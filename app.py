@@ -1,59 +1,40 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from tensorflow.keras.models import load_model
-from sklearn.preprocessing import MinMaxScaler
 import numpy as np
-import psutil  # Library for monitoring system resources
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
 
-# Define memory usage threshold (in MB)
-MEMORY_THRESHOLD_MB = 900  # Set the limit at which to clear cache and reload data
+# Hàm khởi tạo mô hình LSTM mới
+def create_lstm_model(input_shape):
+    model = Sequential()
+    model.add(LSTM(units=50, return_sequences=True, input_shape=input_shape))
+    model.add(LSTM(units=50))
+    model.add(Dense(units=1))
+    model.compile(optimizer='adam', loss='mean_squared_error')
+    return model
 
-def clear_cache_if_memory_high():
-    # Get the current memory usage
-    memory_usage = psutil.virtual_memory().used / (1024 * 1024)  # Convert to MB
-    
-    # Check if memory usage exceeds the threshold
-    if memory_usage > MEMORY_THRESHOLD_MB:
-        st.cache_data.clear()      # Clear cached data
-        st.cache_resource.clear()  # Clear cached resources
-        st.warning("Memory usage is high. Cache has been cleared to free up resources. Reloading data...")
+# Khởi tạo mô hình LSTM mà không cần tải từ tệp
+lstm_model = create_lstm_model((5, 1))  # Thiết lập hình dạng đầu vào của bạn
 
-        # Reload data and model after clearing cache
-        global loaded_lstm_model, df_ticker, df_info
-        loaded_lstm_model = load_lstm_model()
-        df_ticker, df_info = download_data()
-
-# Load data from GitHub with cache expiration
-@st.cache_data(ttl=600)  # Cache will auto-clear after 10 minutes
+# Tải dữ liệu từ Google Drive
+@st.cache_data
 def download_data():
-    url_ticker = "https://raw.githubusercontent.com/letrongnghia1203/Streamlit-app/refs/heads/main/VN2023-data.xlsx%20-%20Ticker.csv"
-    url_info = "https://raw.githubusercontent.com/letrongnghia1203/Streamlit-app/refs/heads/main/VN2023-data.xlsx%20-%20Info.csv"
-    
-    # Read data directly from GitHub
-    df_ticker = pd.read_csv(url_ticker, low_memory=False)
-    df_info = pd.read_csv(url_info, low_memory=False)
+    url = "https://drive.google.com/uc?export=download&id=1x1CkrJRe6PTOdWouYLhqG3f8MEXP-kbl"
+    df_ticker = pd.read_csv(url)
+    url_info = "https://drive.google.com/uc?export=download&id=1M9GA96Zhoj9HzqMPIlfnMeK7pob1bv2z"
+    df_info = pd.read_csv(url_info)
     return df_ticker, df_info
 
-# Load LSTM model with caching
-@st.cache_resource(ttl=600)  # Cache will auto-clear after 10 minutes
-def load_lstm_model():
-    # Load the model from a local file
-    return load_model('best_lstm_model.keras')
-
-# Run memory check before loading resources
-clear_cache_if_memory_high()
-
-# Load data and model
-loaded_lstm_model = load_lstm_model()
 df_ticker, df_info = download_data()
 
-# Data preprocessing
+# Xử lý dữ liệu
 df_info.columns = [col.replace('.', '_') for col in df_info.columns]
 df_joined = pd.merge(df_info, df_ticker, on="Name", how="inner")
 ticker_date_columns = [col for col in df_ticker.columns if '/' in col]
 
-# Convert data from wide format to long format
+# Chuyển đổi dữ liệu từ dạng rộng sang dạng dài
 df_vietnam = df_joined.melt(id_vars=list(df_info.columns) + ["Code"],
                             value_vars=ticker_date_columns,
                             var_name="Ngày", value_name="Giá đóng cửa")
@@ -64,13 +45,13 @@ df_vietnam["Giá đóng cửa"] = pd.to_numeric(df_vietnam["Giá đóng cửa"].
 df_vietnam = df_vietnam.dropna(subset=["Giá đóng cửa"])
 df_vietnam = df_vietnam[df_vietnam["Exchange"] != "Hanoi OTC"]
 
-# Display app title
+# Hiển thị tiêu đề ứng dụng
 st.title("Stock Market Data Visualization with LSTM Predictions")
 
-# Get user input for stock symbol
+# Lấy input mã cổ phiếu từ người dùng
 symbol = st.text_input("Nhập mã cổ phiếu để xem thông tin chi tiết và dự đoán:")
 
-# Function to create sequences for LSTM
+# Hàm tạo chuỗi cho LSTM
 def create_sequences(data, seq_length=5):
     x = []
     y = []
@@ -79,42 +60,42 @@ def create_sequences(data, seq_length=5):
         y.append(data[i + seq_length])
     return np.array(x), np.array(y)
 
-# If user inputs a stock symbol
+# Nếu người dùng nhập mã cổ phiếu
 if symbol:
-    # Filter data by stock symbol
+    # Lọc dữ liệu theo mã cổ phiếu
     df_filtered = df_vietnam[df_vietnam['Symbol'] == symbol.upper()]
 
     if not df_filtered.empty:
-        # Display one row of stock information
+        # Hiển thị một dòng thông tin của mã cổ phiếu
         st.write(f"Thông tin chi tiết của mã cổ phiếu {symbol.upper()}:")
-        st.write(df_filtered.head(1))  # Show only one row
+        st.write(df_filtered.head(1))  # Hiển thị chỉ một dòng
 
-        # Create Plotly chart
+        # Tạo biểu đồ với Plotly
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=df_filtered['Ngày'], y=df_filtered['Giá đóng cửa'], mode='lines+markers', name='Giá Đóng Cửa'))
         
-        # Prepare data for LSTM prediction
+        # Chuẩn bị dữ liệu cho dự đoán LSTM
         prices = df_filtered[['Giá đóng cửa']].values
         scaler = MinMaxScaler(feature_range=(0, 1))
         prices_scaled = scaler.fit_transform(prices)
 
-        # Generate sequences for LSTM
+        # Chuỗi dữ liệu cho LSTM
         seq_length = 5
         X, _ = create_sequences(prices_scaled, seq_length)
 
         if len(X) > 0:
-            # Predict with LSTM
-            predictions = loaded_lstm_model.predict(X)
+            # Dự đoán bằng mô hình LSTM (chưa được huấn luyện nên kết quả chỉ là ví dụ)
+            predictions = lstm_model.predict(X)
             predictions = scaler.inverse_transform(predictions)
 
-            # Add predictions to chart
+            # Thêm dự đoán vào biểu đồ
             prediction_dates = df_filtered['Ngày'].iloc[seq_length:].values
-            fig.add_trace(go.Scatter(x=prediction_dates, y=predictions.flatten(), mode='lines', name='Dự đoán'))
+            fig.add_trace(go.Scatter(x=prediction_dates, y=predictions.flatten(), mode='lines', name='Dự đoán (untrained)'))
 
         fig.update_layout(title=f'Giá Đóng Cửa Cổ Phiếu {symbol.upper()} với Dự Đoán LSTM',
                           xaxis_title='Ngày', yaxis_title='Giá Đóng Cửa (VND)', template='plotly_white')
         
-        # Display chart on Streamlit
+        # Hiển thị biểu đồ trên Streamlit
         st.plotly_chart(fig)
     else:
         st.write("Không có dữ liệu cho mã cổ phiếu này.")
