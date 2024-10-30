@@ -7,7 +7,7 @@ from sklearn.preprocessing import MinMaxScaler
 import numpy as np
 
 # Tải dữ liệu từ Google Drive với cache hạn chế thời gian lưu trữ (TTL)
-@st.cache_data(ttl=5)  # Cache sẽ tự động xóa sau 24 giờ
+@st.cache_data(ttl=5)  # Cache sẽ tự động xóa sau 5s
 def download_data():
     gdown.download("https://drive.google.com/uc?export=download&id=1x1CkrJRe6PTOdWouYLhqG3f8MEXP-kbl", "VN2023-data-Ticker.csv", quiet=False)
     gdown.download("https://drive.google.com/uc?export=download&id=1M9GA96Zhoj9HzqMPIlfnMeK7pob1bv2z", "VN2023-data-Info.csv", quiet=False)
@@ -17,7 +17,7 @@ def download_data():
     return df_ticker, df_info
 
 # Tải mô hình LSTM từ Google Drive và cache lại để tránh tải lại nhiều lần
-@st.cache_resource(ttl=5)  # Cache sẽ tự động xóa sau 24 giờ
+@st.cache_resource(ttl=5)  # Cache sẽ tự động xóa sau 5s
 def load_lstm_model():
     model_id = '1-2diAZCXfnoe38o21Vv5Sx8wmre1IceY'
     gdown.download(f'https://drive.google.com/uc?export=download&id={model_id}', 'best_lstm_model.keras', quiet=False)
