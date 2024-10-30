@@ -7,7 +7,7 @@ from sklearn.preprocessing import MinMaxScaler
 import numpy as np
 
 # Tải dữ liệu từ Google Drive với cache hạn chế thời gian lưu trữ (TTL)
-@st.cache_data(ttl=24*3600)  # Cache sẽ tự động xóa sau 24 giờ
+@st.cache_data(ttl=30)  # Cache sẽ tự động xóa sau 24 giờ
 def download_data():
     gdown.download("https://drive.google.com/uc?export=download&id=1x1CkrJRe6PTOdWouYLhqG3f8MEXP-kbl", "VN2023-data-Ticker.csv", quiet=False)
     gdown.download("https://drive.google.com/uc?export=download&id=1M9GA96Zhoj9HzqMPIlfnMeK7pob1bv2z", "VN2023-data-Info.csv", quiet=False)
