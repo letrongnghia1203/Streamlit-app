@@ -17,7 +17,7 @@ def download_data():
     return df_ticker, df_info
 
 # Tải mô hình LSTM từ Google Drive và cache lại để tránh tải lại nhiều lần
-@st.cache_resource(ttl=24*3600)  # Cache sẽ tự động xóa sau 24 giờ
+@st.cache_resource(ttl=5)  # Cache sẽ tự động xóa sau 24 giờ
 def load_lstm_model():
     model_id = '1-2diAZCXfnoe38o21Vv5Sx8wmre1IceY'
     gdown.download(f'https://drive.google.com/uc?export=download&id={model_id}', 'best_lstm_model.keras', quiet=False)
