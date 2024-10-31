@@ -64,11 +64,26 @@ df_vietnam["Giá đóng cửa"] = pd.to_numeric(df_vietnam["Giá đóng cửa"].
 df_vietnam = df_vietnam.dropna(subset=["Giá đóng cửa"])
 df_vietnam = df_vietnam[df_vietnam["Exchange"] != "Hanoi OTC"]
 
+# Initialize the previous symbol variable
+if 'prev_symbol' not in st.session_state:
+    st.session_state.prev_symbol = ""
+
 # Hiển thị tiêu đề ứng dụng
 st.title("Stock Market Data Visualization with LSTM Predictions")
 
 # Lấy input mã cổ phiếu từ người dùng
 symbol = st.text_input("Nhập mã cổ phiếu để xem thông tin chi tiết và dự đoán:")
+
+# Check if a new stock symbol has been entered and reset data if it has
+if symbol and symbol != st.session_state.prev_symbol:
+    st.session_state.prev_symbol = symbol  # Update the symbol in session state
+    st.cache_data.clear()      # Clear cached data
+    st.cache_resource.clear()  # Clear cached resources
+    st.write("Loading new stock data...")
+
+    # Reload data and model after clearing cache
+    loaded_lstm_model = load_lstm_model()
+    df_ticker, df_info = download_data()
 
 # Hàm tạo chuỗi cho LSTM
 def create_sequences(data, seq_length=5):
